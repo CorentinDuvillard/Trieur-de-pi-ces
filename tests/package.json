@@ -1,0 +1,16 @@
+{
+  "name": "trieur-de-pieces-tests",
+  "private": true,
+  "description": "Génération de dossiers fictifs et tests automatisés du Trieur de pièces",
+  "scripts": {
+    "generer": "node generer-dossiers.js",
+    "tester": "node tester.js"
+  },
+  "devDependencies": {
+    "docx": "^9.5.1",
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
+    "playwright-core": "^1.55.0",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trieur de pièces</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header>
+  <img id="logo" alt="Emérite Groupe">
+  <nav aria-label="Sections" role="tablist">
+    <button type="button" role="tab" id="onglet-trieur" aria-selected="true" aria-controls="section-trieur">Trieur</button>
+    <button type="button" role="tab" id="onglet-mail" aria-selected="false" aria-controls="section-mail" tabindex="-1">Mail type</button>
+  </nav>
+</header>
+
+<div class="app" id="section-trieur" role="tabpanel" aria-labelledby="onglet-trieur">
+  <aside aria-label="Dossiers">
+    <button class="nouveau" type="button" id="nouveau">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Nouveau dossier
+    </button>
+    <div id="liste-dossiers"></div>
+  </aside>
+
+  <main>
+    <!-- Écran 1 : dépôt -->
+    <section class="ecran" id="e1" aria-label="Dépôt des pièces" data-visible>
+      <div class="depot" id="zone-depot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 11l2.5 2.5"/></svg>
+        <b>Déposer les pièces</b>
+        <div class="boutons">
+          <button class="btn btn-dore" type="button" id="btn-dossier">Dossier</button>
+          <button class="btn" type="button" id="btn-fichiers">Fichiers</button>
+        </div>
+        <input type="file" id="choix-dossier" webkitdirectory multiple hidden>
+        <input type="file" id="choix-fichiers" multiple hidden>
+      </div>
+    </section>
+
+    <!-- Écran 2 : tri -->
+    <section class="ecran" id="e2" aria-label="Tri en cours">
+      <div class="carte">
+        <div class="tete-carte"><h2 id="tri-nom"></h2><span id="tri-compteur" role="status" aria-live="polite"></span></div>
+        <div class="barre" role="progressbar" aria-label="Progression du tri" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="tri-barre"><span></span></div>
+        <ul class="journal" id="tri-journal"></ul>
+      </div>
+    </section>
+
+    <!-- Écran 3 : résultat -->
+    <section class="ecran" id="e3" aria-label="Résultat du tri">
+      <div id="res-alerte" class="alerte-bouclage" role="alert" hidden></div>
+      <div class="barre-resultat">
+        <h2 id="res-nom"></h2>
+        <div class="compte" id="res-compte"></div>
+        <button class="btn btn-dore" type="button" id="btn-zip">Télécharger le ZIP</button>
+      </div>
+      <p class="info-ignores" id="res-ignores" hidden></p>
+
+      <div class="resultat">
+        <div class="carte">
+          <h3>Profils</h3>
+          <div class="profils" id="res-profils"></div>
+          <h3>Contenu du ZIP</h3>
+          <ul class="arbre" id="res-arbre"></ul>
+        </div>
+
+        <div>
+          <div class="onglets-pdf" role="tablist" aria-label="Documents générés">
+            <button type="button" role="tab" id="tab-fiche" aria-selected="true" aria-controls="pdf-fiche" data-pdf="fiche">Fiche client</button>
+            <button type="button" role="tab" id="tab-rapport" aria-selected="false" aria-controls="pdf-rapport" data-pdf="rapport" tabindex="-1">Rapport de tri</button>
+          </div>
+          <div class="a4 apercu" id="pdf-fiche" role="tabpanel" aria-labelledby="tab-fiche" data-visible></div>
+          <div class="a4 apercu" id="pdf-rapport" role="tabpanel" aria-labelledby="tab-rapport"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="app-mail" id="section-mail" role="tabpanel" aria-labelledby="onglet-mail" hidden>
+  <main>
+    <div class="carte carte-mail">
+      <div class="tete-carte">
+        <h2>Demande de pièces</h2>
+        <button class="btn btn-dore" type="button" id="btn-copier">Copier</button>
+      </div>
+      <div class="mail" id="mail"></div>
+    </div>
+  </main>
+</div>
+
+<script src="libs/pdf.min.js"></script>
+<script src="libs/pdf.worker.min.js"></script>
+<script src="libs/tesseract.min.js"></script>
+<script src="libs/tesseract-worker.js"></script>
+<script src="libs/tesseract-core.js"></script>
+<script src="libs/lang-fra.js"></script>
+<script src="libs/lang-eng.js"></script>
+<script src="libs/mammoth.browser.min.js"></script>
+<script src="libs/xlsx.full.min.js"></script>
+<script src="libs/heic2any.min.js"></script>
+<script src="libs/pako.min.js"></script>
+<script src="libs/UTIF.js"></script>
+<script src="libs/jszip.min.js"></script>
+<script src="libs/jspdf.umd.min.js"></script>
+<script src="libs/logo.js"></script>
+<script src="regles.js"></script>
+<script src="mail-type.js"></script>
+<script src="moteur/outils.js"></script>
+<script src="moteur/extraction.js"></script>
+<script src="moteur/reconnaissance.js"></script>
+<script src="moteur/rattachement.js"></script>
+<script src="moteur/profils.js"></script>
+<script src="moteur/sortie.js"></script>
+<script src="moteur/moteur.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

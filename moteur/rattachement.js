@@ -37,10 +37,12 @@
     return null;
   }
 
-  function trouverPersonnes(ex, personnes) {
+  function trouverPersonnes(ex, personnes, autres) {
     const res = { fort: [], proche: [] };
+    const tous = personnes.concat(autres || []);
     for (const p of personnes) {
-      const homonymes = personnes.some((q) => q !== p && q.nNom === p.nNom);
+      // Même nom de famille qu'un emprunteur ou qu'un tiers (hébergeant, donateur) : le prénom est exigé
+      const homonymes = tous.some((q) => q !== p && q.nNom === p.nNom);
       const c = correspondance(ex, p, homonymes);
       if (c === 'fort' || c === 'nom') res.fort.push(p);
       else if (c === 'proche') res.proche.push(p);
@@ -233,8 +235,8 @@
 
     // Correspondances de chaque pièce
     for (const it of lus) {
-      it.corr = trouverPersonnes(it.extraction, emprunteurs);
-      it.corrTiers = trouverPersonnes(it.extraction, res.tiers);
+      it.corr = trouverPersonnes(it.extraction, emprunteurs, res.tiers);
+      it.corrTiers = trouverPersonnes(it.extraction, res.tiers, emprunteurs);
     }
 
     // 3. Entités

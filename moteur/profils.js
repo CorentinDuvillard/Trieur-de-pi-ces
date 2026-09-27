@@ -93,6 +93,8 @@
     const pieces = classes(items);
     const auj = new Date();
     const lignes = [];
+    // Aucune personne identifiée : aucun profil, donc aucune pièce à réclamer
+    if (!res.personnes.length) return lignes;
     const actif = (si) => {
       if (si === 'tous') return true;
       if (si.startsWith('profil:')) return res.profilsTous.has(si.slice(7)) || res.personnes.some((p) => p.profilIds.has(si.slice(7)));

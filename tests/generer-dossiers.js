@@ -40,9 +40,9 @@ const page = (contenu) => `<div class="page">${contenu}</div>`;
 
 // ---------- Pièces ----------
 function bulletin(o) {
-  const lignes = [['Salaire de base', o.brut]].concat(o.primes ? [['Prime sur objectifs', o.primes]] : []);
+  const lignes = [[o.rubrique || 'Salaire de base', o.brut]].concat(o.primes ? [['Prime sur objectifs', o.primes]] : []);
   return page(`<div class="ent"><div><b>${o.emp}</b><br>${o.empAdr}<br>SIRET 000 000 000 00000</div><div class="d"><h1>BULLETIN DE PAIE</h1>Période du 01/${mm(o.m)}/${o.a} au ${o.m === 2 ? 28 : 30}/${mm(o.m)}/${o.a}</div></div>
-  <div class="enc">Salarié : <b>${o.civ} ${o.nom} ${o.prenom}</b><br>${o.adr}<br>Emploi : ${o.emploi} - Contrat à durée indéterminée (CDI)<br>Date d'entrée : 01/03/2019</div>
+  <div class="enc">Salarié : <b>${o.civ} ${o.nom} ${o.prenom}</b><br>${o.adr}<br>Emploi : ${o.emploi} - ${o.contrat || 'Contrat à durée indéterminée (CDI)'}<br>Date d'entrée : 01/03/2019</div>
   <table><tr><th>Rubrique</th><th>Base</th><th>Montant</th></tr>${lignes.map(([r, v]) => `<tr><td>${r}</td><td></td><td>${v} €</td></tr>`).join('')}
   <tr><td>Salaire brut</td><td></td><td>${o.brutTotal} €</td></tr><tr><td>Cotisations salariales</td><td></td><td>-${o.cotis} €</td></tr>
   <tr><td>Net imposable</td><td></td><td>${o.netImp} €</td></tr><tr><td><b>Net à payer avant impôt</b></td><td></td><td><b>${o.net} €</b></td></tr></table>
@@ -447,6 +447,91 @@ async function casRetraite() {
   await ecrire('5 - Retraite et cas limites', f);
 }
 
+async function casVenteAchat() {
+  const P = { civ: 'M.', nom: 'MARTIN', prenom: 'Paul' };
+  const S = { civ: 'Mme', nom: 'MARTIN', prenom: 'Sophie' };
+  const EP = 'MARTIN Paul', ES = 'MARTIN Sophie', EE = 'MARTIN Paul et MARTIN Sophie';
+  const DOM = '4 rue Pasteur, 44000 Nantes', BIEN = '4 rue Pasteur, Nantes';
+  const PROJ = '11 rue Crébillon, 44000 Nantes';
+  const f = [];
+  f.push({ nom: 'CNI Paul.jpg', data: await photo(carteIdentiteRecente({ nom: 'MARTIN', prenoms: 'PAUL, ÉTIENNE', sexe: 'M', naissance: '03/04/1982', lieu: 'NANTES', expiration: '14/09/2031', mrz: mrzTD1('MARTIN', 'PAUL ETIENNE', 'M', '820403', '310914') }), { angle: -3 }), attendu: `État civil/${EP} - Carte d'identité` });
+  f.push({ nom: 'CNI Sophie.pdf', data: await scan(carteIdentiteAncienne({ nom: 'MARTIN', prenoms: 'SOPHIE, ANNE', sexe: 'F', naissance: '27.08.1984', lieu: 'ANGERS (49)', expiration: '02.02.2030', mrz: mrzCniAncienne('MARTIN', 'SOPHIE ANNE', 'F', '840827') })), attendu: `État civil/${ES} - Carte d'identité` });
+  f.push({ nom: 'contrat de mariage.pdf', data: await pdf(simple('CONTRAT DE MARIAGE', ['Office notarial de Maître BERTIN, Nantes', 'Entre les futurs époux M. MARTIN Paul et Mme MARTIN Sophie, née LEGRAND', 'Les futurs époux adoptent le régime de la séparation de biens.', 'Fait à Nantes, le 12/05/2012'])), attendu: `État civil/${EE} - Contrat de mariage` });
+  f.push({ nom: 'livret de famille.pdf', data: await scan(simple('LIVRET DE FAMILLE', ['Extrait d\'acte de mariage : M. MARTIN Paul et Mme MARTIN Sophie, mariés le 16/06/2012 à Nantes', 'Enfant : MARTIN Chloé, née le 02/03/2015, acte de naissance n° 311', 'Enfant : MARTIN Hugo, né le 21/10/2018, acte de naissance n° 902'])), attendu: `État civil/${EE} - Livret de famille` });
+  f.push({ nom: 'facture electricite.pdf', data: await pdf(facture({ fournisseur: 'EDF', titulaire: 'M. MARTIN Paul et Mme MARTIN Sophie', adr: DOM, date: jour(4, M1.m, M1.a), du: jour(1, M2.m, M2.a), au: jour(30, M2.m, M2.a), ligne: 'Électricité, consommation 410 kWh', montant: '88,10' })), attendu: `État civil/${EE} - Justificatif de domicile - ${mm(M1.m)}-${M1.a}` });
+  const av = (an) => avis({ an, centre: 'Nantes', decl: [P, S], adr: DOM, situation: 'Mariés', parts: '3', charge: '2', rev: '96 000', rfr: '86 400', impot: '6 900' });
+  for (const an of [AN, AN - 1, AN - 2]) f.push({ nom: `avis ${an}.pdf`, data: await pdf(av(an)), attendu: `Revenus/Avis d'imposition/${EE} - Avis d'imposition - ${an}` });
+  const bulS = (m, a) => bulletin({ ...S, adr: DOM, emp: 'CENTRE HOSPITALIER DE NANTES', empAdr: '5 allée de l\'Île Gloriette, 44000 Nantes', emploi: 'Infirmière', contrat: 'Titulaire de la fonction publique hospitalière', rubrique: 'Traitement brut indiciaire (indice majoré 520)', m, a, brut: '2 850,00', brutTotal: '2 850,00', cotis: '520,00', netImp: '2 400,00', net: '2 330,00' });
+  const bulP = (m, a) => bulletin({ ...P, adr: DOM, emp: 'ATELIERS LOIRE MÉTAL', empAdr: '20 quai de la Fosse, 44000 Nantes', emploi: 'Technicien', contrat: 'Contrat à durée déterminée (CDD)', m, a, brut: '2 600,00', brutTotal: '2 600,00', cotis: '570,00', netImp: '2 100,00', net: '2 030,00' });
+  for (const mo of [M1, M2, M3, { m: 12, a: AN - 1 }]) {
+    f.push({ nom: `paie Sophie ${mm(mo.m)}-${mo.a}.pdf`, data: await pdf(bulS(mo.m, mo.a)), attendu: `Revenus/Bulletins de salaire et contrat/${ES} - Bulletin de salaire - ${mm(mo.m)}-${mo.a}` });
+    f.push({ nom: `paie Paul ${mm(mo.m)}-${mo.a}.pdf`, data: await pdf(bulP(mo.m, mo.a)), attendu: `Revenus/Bulletins de salaire et contrat/${EP} - Bulletin de salaire - ${mm(mo.m)}-${mo.a}` });
+  }
+  f.push({ nom: 'arrete titularisation.pdf', data: await pdf(simple('ARRÊTÉ DE TITULARISATION', ['Centre hospitalier de Nantes, direction des ressources humaines', 'Mme MARTIN Sophie, infirmière stagiaire, est titularisée dans le grade d\'infirmière en soins généraux de la fonction publique hospitalière à compter du 01/09/2016.', 'Fait à Nantes, le 25/08/2016'])), attendu: `Revenus/Bulletins de salaire et contrat/${ES} - Arrêté de titularisation - 08-2016` });
+  f.push({ nom: 'CDD Paul.docx', data: await docxDepuis(['CONTRAT DE TRAVAIL À DURÉE DÉTERMINÉE', 'Entre la société ATELIERS LOIRE MÉTAL, ci-après l\'employeur, et Monsieur MARTIN Paul, ci-après le salarié.', 'Le présent contrat à durée déterminée est conclu pour 18 mois à compter du 01/02/' + AN + '.', 'Fait à Nantes, le 20/01/' + AN]), attendu: `Revenus/Bulletins de salaire et contrat/${EP} - Contrat de travail - 01-${AN}` });
+  // Bien actuel, en vente
+  f.push({ nom: 'titre de propriete.pdf', data: await scan(titrePropriete({ acquereur: 'M. MARTIN Paul et Mme MARTIN Sophie', adr: DOM, prix: '248 000', surface: '82', date: '19/09/2014' })), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Titre de propriété - 09-2014` });
+  f.push({ nom: 'taxe fonciere.pdf', data: await pdf(taxeFonciere({ an: AN - 1, proprietaire: 'M. MARTIN Paul et Mme MARTIN Sophie', adrProprietaire: DOM, adrBien: DOM })), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Taxe foncière - ${AN - 1}` });
+  f.push({ nom: 'mandat agence.pdf', data: await pdf(simple('MANDAT DE VENTE EXCLUSIF', ['Agence NANTES CENTRE IMMOBILIER, mandataire', 'Mandants : M. MARTIN Paul et Mme MARTIN Sophie', 'Bien à vendre : maison située au ' + DOM, 'Prix de vente : 365 000 euros', 'Fait à Nantes, le 02/05/' + AN])), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Mandat de vente - 05-${AN}` });
+  f.push({ nom: 'offre achat.pdf', data: await pdf(simple('OFFRE D\'ACHAT', ['Je soussigné M. GARNIER Luc, fais une offre d\'achat pour le bien de M. MARTIN Paul et Mme MARTIN Sophie situé au ' + DOM + ' au prix de 355 000 euros.', 'Validité de l\'offre : 10 jours.', 'Fait à Nantes, le 18/06/' + AN])), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Offre d'achat - 06-${AN}` });
+  f.push({ nom: 'compromis vente maison.pdf', data: await pdf(compromis({ vendeur: 'M. MARTIN Paul et Mme MARTIN Sophie', acquereur: 'M. GARNIER Luc et Mme GARNIER Emma', adr: DOM, desc: 'maison de 5 pièces', usage: 'résidence principale des acquéreurs', prix: '355 000', ville: 'Nantes', date: jour(3, M2.m, M2.a) })), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Compromis de vente - ${mm(M2.m)}-${M2.a}` });
+  f.push({ nom: 'accord banque acquereurs.pdf', data: await pdf(simple('ACCORD DE PRINCIPE', ['BANQUE DE L\'OUEST', 'Emprunteurs : M. GARNIER Luc et Mme GARNIER Emma', 'Nous donnons notre accord de principe pour le financement de l\'acquisition du bien situé au ' + DOM + '.', 'Fait à Rennes, le 10/' + mm(M1.m) + '/' + M1.a])), attendu: `Patrimoine/Immobilier/${BIEN}/${EE} - Accord de principe des acquéreurs - ${mm(M1.m)}-${M1.a}` });
+  f.push({ nom: 'offre pret en cours.pdf', data: await pdf(offrePret({ banque: 'CRÉDIT ATLANTIQUE', date: '01/08/2014', emprunteur: 'M. MARTIN Paul et Mme MARTIN Sophie', objet: 'Acquisition immobilière du bien situé au ' + DOM, montant: '210 000', duree: 300, taeg: '2,85' })), attendu: `Patrimoine/Crédits immo/${EE} - Offre de prêt immobilier - 08-2014` });
+  f.push({ nom: 'succession.pdf', data: await pdf(simple('ATTESTATION DE SUCCESSION', ['Office notarial de Maître BERTIN', 'Succession de M. MARTIN Henri, défunt le 04/01/' + AN, 'Héritier : M. MARTIN Paul, son fils', 'Actif net revenant à l\'héritier : 42 000 euros.', 'Fait à Nantes, le 15/03/' + AN])), attendu: `Patrimoine/Épargne/${EP} - Justificatif de succession - 03-${AN}` });
+  for (const mo of [M1, M2, M3]) f.push({ nom: `compte commun ${mm(mo.m)}.pdf`, data: await pdf(releve({ banque: 'CRÉDIT ATLANTIQUE', agence: 'Nantes Commerce', titulaire: 'M. MARTIN Paul ou Mme MARTIN Sophie', m: mo.m, a: mo.a })), attendu: `Patrimoine/Relevés de compte/${EE} - Relevé de compte - ${mm(mo.m)}-${mo.a}` });
+  // Projet
+  f.push({ nom: 'compromis achat.pdf', data: await pdf(compromis({ vendeur: 'Mme ROBIN Claire', acquereur: 'M. MARTIN Paul et Mme MARTIN Sophie', adr: PROJ, desc: 'appartement de 4 pièces', usage: 'résidence principale des acquéreurs', prix: '420 000', ville: 'Nantes', date: jour(12, M1.m, M1.a) })), attendu: `Projet/${EE} - Compromis de vente - ${mm(M1.m)}-${M1.a}` });
+  f.push({ nom: 'devis cuisine.pdf', data: await pdf(simple('DEVIS', ['CUISINES DE L\'ERDRE', 'Client : M. MARTIN Paul, chantier au ' + PROJ, 'Travaux : fourniture et pose d\'une cuisine équipée. Montant HT : 14 200 euros.', 'Validité du devis : 3 mois. Bon pour accord.', 'Fait à Nantes, le 20/' + mm(M1.m) + '/' + M1.a])), attendu: `Projet/${EE} - Devis travaux - ${mm(M1.m)}-${M1.a}` });
+  f.push({ nom: 'prorogation.pdf', data: await pdf(simple('AVENANT AU COMPROMIS - PROROGATION', ['Les parties conviennent de la prorogation des conditions suspensives du compromis portant sur le bien situé au ' + PROJ + '.', 'Nouvelle date de réalisation : 30/11/' + AN, 'Fait à Nantes, le 15/' + mm(AUJ.getMonth() + 1) + '/' + AN])), attendu: `Projet/${EE} - Prorogation des conditions suspensives - ${mm(AUJ.getMonth() + 1)}-${AN}` });
+  f.push({ nom: 'diagnostics crebillon.pdf', data: await pdf(ddt({ adr: PROJ })), attendu: `Projet/${EE} - Diagnostics - 07-${AN}` });
+  await ecrire('6 - Couple marie vente et achat', f);
+}
+
+async function casHebergee() {
+  const M = { civ: 'Mme', nom: 'DUPUIS', prenom: 'Manon' };
+  const E = 'DUPUIS Manon';
+  const DOM = '9 impasse des Mésanges, 31400 Toulouse';
+  const PROJ = '2 allée Jean Jaurès, 31000 Toulouse';
+  const f = [];
+  f.push({ nom: 'ma carte identite.jpg', data: await photo(carteIdentiteRecente({ nom: 'DUPUIS', prenoms: 'MANON, LÉA', sexe: 'F', naissance: '09/12/1999', lieu: 'TOULOUSE', expiration: '21/06/2032', mrz: mrzTD1('DUPUIS', 'MANON LEA', 'F', '991209', '320621') }), { quart: 1, angle: 2 }), attendu: `État civil/${E} - Carte d'identité` });
+  f.push({ nom: 'attestation hebergement.pdf', data: await pdf(simple('ATTESTATION D\'HÉBERGEMENT', ['Je soussigné M. DUPUIS Alain, demeurant ' + DOM + ', certifie héberger à titre gratuit ma fille, Mme DUPUIS Manon, à mon domicile depuis le 01/09/2021.', 'Fait pour servir et valoir ce que de droit. Attestation sur l\'honneur.', 'Fait à Toulouse, le ' + jour(2, M1.m, M1.a)])), attendu: `État civil/${E} - Attestation d'hébergement - ${mm(M1.m)}-${M1.a}` });
+  f.push({ nom: 'cni papa.jpg', data: await photo(carteIdentiteRecente({ nom: 'DUPUIS', prenoms: 'ALAIN, ROBERT', sexe: 'M', naissance: '17/02/1968', lieu: 'ALBI', expiration: '30/04/2029', mrz: mrzTD1('DUPUIS', 'ALAIN ROBERT', 'M', '680217', '290430') })), attendu: `État civil/${E} - Pièce d'identité de l'hébergeant` });
+  f.push({ nom: 'facture papa.pdf', data: await pdf(facture({ fournisseur: 'ENGIE', titulaire: 'M. DUPUIS Alain', adr: DOM, date: jour(8, M1.m, M1.a), du: jour(1, M2.m, M2.a), au: jour(30, M2.m, M2.a), ligne: 'Gaz naturel, consommation 620 kWh', montant: '74,30' })), attendu: `État civil/${E} - Justificatif de domicile de l'hébergeant - ${mm(M1.m)}-${M1.a}` });
+  const bul = (m, a) => bulletin({ ...M, adr: DOM, emp: 'STUDIO PIXELIA', empAdr: '12 rue Alsace-Lorraine, 31000 Toulouse', emploi: 'Graphiste', m, a, brut: '2 400,00', brutTotal: '2 400,00', cotis: '530,00', netImp: '1 930,00', net: '1 870,00' });
+  for (const mo of [M1, M2, M3]) f.push({ nom: `fiche de paie ${mm(mo.m)}.pdf`, data: await pdf(bul(mo.m, mo.a)), attendu: `Revenus/Bulletins de salaire et contrat/${E} - Bulletin de salaire - ${mm(mo.m)}-${mo.a}` });
+  f.push({ nom: 'contrat pixelia.pdf', data: await pdf(page(`<h1>CONTRAT DE TRAVAIL</h1><p>Entre la société STUDIO PIXELIA, ci-après l'employeur, et Mme DUPUIS Manon, ci-après le salarié.</p><p>Contrat à durée indéterminée à compter du 03/02/${AN}. Période d'essai de deux mois.</p><p>Fait à Toulouse, le 20/01/${AN}</p>`)), attendu: `Revenus/Bulletins de salaire et contrat/${E} - Contrat de travail - 01-${AN}` });
+  f.push({ nom: 'fin essai.pdf', data: await pdf(simple('ATTESTATION DE FIN DE PÉRIODE D\'ESSAI', ['STUDIO PIXELIA atteste que la période d\'essai de Mme DUPUIS Manon a pris fin le 02/04/' + AN + '. Son embauche est confirmée définitivement.', 'Fait à Toulouse, le 03/04/' + AN])), attendu: `Revenus/Bulletins de salaire et contrat/${E} - Attestation de fin de période d'essai - 04-${AN}` });
+  f.push({ nom: 'avenant salaire.pdf', data: await pdf(simple('AVENANT AU CONTRAT DE TRAVAIL', ['Entre STUDIO PIXELIA et Mme DUPUIS Manon.', 'Nouvelle rémunération : 2 400 euros bruts mensuels à compter du 01/06/' + AN + '.', 'Fait à Toulouse, le 25/05/' + AN])), attendu: `Revenus/Bulletins de salaire et contrat/${E} - Avenant au contrat de travail - 05-${AN}` });
+  f.push({ nom: 'avis impot.pdf', data: await pdf(avis({ an: AN, centre: 'Toulouse', decl: [M], adr: DOM, situation: 'Célibataire', parts: '1', charge: '0', rev: '21 000', rfr: '18 900', impot: '620' })), attendu: `Revenus/Avis d'imposition/${E} - Avis d'imposition - ${AN}` });
+  const z = new JSZip();
+  for (const mo of [M1, M2, M3]) z.file(`releve ${mm(mo.m)}.pdf`, await pdf(releve({ banque: 'BANQUE OCCITANE', agence: 'Toulouse Capitole', titulaire: 'Mme DUPUIS Manon', m: mo.m, a: mo.a })));
+  f.push({ nom: 'mes releves.zip', data: await z.generateAsync({ type: 'nodebuffer' }), attendus: [M1, M2, M3].map((mo) => [`mes releves.zip / releve ${mm(mo.m)}.pdf`, `Patrimoine/Relevés de compte/${E} - Relevé de compte - ${mm(mo.m)}-${mo.a}`]) });
+  f.push({ nom: 'PEL.pdf', data: await pdf(page(`<h1>RELEVÉ DE COMPTE ÉPARGNE</h1><div class="enc">Titulaire : Mme DUPUIS Manon<br>Plan d'épargne logement (PEL) n° 5566</div><p>Situation au 30/06/${AN}</p><table><tr><td>Intérêts acquis</td><td>118 €</td></tr><tr><td>Solde</td><td>14 300 €</td></tr></table>`)), attendu: `Patrimoine/Épargne/${E} - Relevé d'épargne - 06-${AN}` });
+  f.push({ nom: 'reservation vefa.pdf', data: await pdf(page(`<h1>CONTRAT DE RÉSERVATION</h1><p>Vente en l'état futur d'achèvement (VEFA)</p><p>RÉSERVANT : SCCV RIVE GARONNE</p><p>RÉSERVATAIRE : Mme DUPUIS Manon</p><p>Appartement de 2 pièces situé au ${PROJ}, destiné à la résidence principale de la réservataire.</p><p>Fait à Toulouse, le ${jour(6, M1.m, M1.a)}</p>`)), attendu: `Projet/${E} - Contrat de réservation - ${mm(M1.m)}-${M1.a}` });
+  f.push({ nom: 'notice rive garonne.pdf', data: await pdf(simple('NOTICE DESCRIPTIVE', ['Programme RIVE GARONNE, ' + PROJ, 'Menuiseries en PVC double vitrage. Revêtements de sol : parquet contrecollé.'])), attendu: `Projet/${E} - Notice descriptive` });
+  f.push({ nom: 'plan lot B04.png', data: await png(`<div style="width:900px;height:600px;padding:30px;font-family:Arial;background:#fff"><div style="font-size:26px;font-weight:bold">PLAN DE VENTE - LOT B04</div><div style="font-size:18px">Échelle 1/50 - Surface habitable 41,2 m2</div><div style="margin-top:30px;display:grid;grid-template-columns:2fr 1fr;gap:6px;height:400px"><div style="border:4px solid #000;padding:12px;font-size:22px">Séjour 22,4 m2</div><div style="border:4px solid #000;padding:12px;font-size:22px">Chambre 10,9 m2</div></div></div>`), attendu: `Projet/${E} - Plans` });
+  await ecrire('7 - Jeune hebergee achat neuf', f);
+}
+
+async function casEchec() {
+  // Dossier en vrac que l'outil ne peut pas exploiter : tout doit partir dans « À vérifier », sans rien forcer
+  const f = [];
+  const flou = async (c, n) => transformer(await png(c), { flou: 10, format: 'jpg', echelle: 0.3, fond: '#4a4038' });
+  f.push({ nom: 'IMG_0001.jpg', data: await flou(simple('BULLETIN DE PAIE', ['Salarié : Mme XXXX', 'Net à payer 1 900 €'])), attendu: 'À vérifier' });
+  f.push({ nom: 'IMG_0002.jpg', data: await flou(simple('AVIS D\'IMPÔT', ['Revenu fiscal de référence'])), attendu: 'À vérifier' });
+  f.push({ nom: 'IMG_0003.jpg', data: await transformer(await png('<div style="width:600px;height:400px;background:linear-gradient(#335,#aa8)"></div>'), { format: 'jpg' }), attendu: 'À vérifier' });
+  f.push({ nom: 'document.pdf', data: Buffer.from('%PDF-1.7\n1 0 obj <<>> endobj\n%%EOF-tronque'), attendu: 'À vérifier' });
+  f.push({ nom: 'scan.pdf', data: Buffer.alloc(0), attendu: 'À vérifier' });
+  f.push({ nom: 'papiers.pdf', data: await fusionPdf([await pdf(facture({ fournisseur: 'EDF', titulaire: 'M. LAMBERT Yves', adr: '3 rue Verte, 59000 Lille', date: '02/01/' + AN, du: '01/12/' + (AN - 1), au: '31/12/' + (AN - 1), ligne: 'Électricité', montant: '51,00' })), await pdf(quittance({ bailleur: 'M. HENRY Paul', locataire: 'M. LAMBERT Yves', adr: '3 rue Verte, 59000 Lille', m: 1, a: AN, montant: 640, ville: 'Lille' }))]), attendu: 'À vérifier' });
+  f.push({ nom: 'Brief.pdf', data: await pdf(simple('Réunion de chantier', ['Ordre du jour : planning, sécurité, livraisons.', 'Prochaine réunion mardi.'])), attendu: 'À vérifier' });
+  f.push({ nom: 'Steuer.pdf', data: await pdf(simple('Mitteilung', ['Sehr geehrte Damen und Herren, anbei erhalten Sie die gewünschten Unterlagen.', 'Mit freundlichen Grüßen'])), attendu: 'À vérifier' });
+  f.push({ nom: 'notes.pages', data: Buffer.from('PK\x03\x04 pages'), attendu: 'À vérifier' });
+  f.push({ nom: 'vieux courrier.doc', data: Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(900, 0)]), attendu: 'À vérifier' });
+  f.push({ nom: 'IMG_0001 (copie).jpg', doublonDe: 'IMG_0001.jpg', attendu: 'À vérifier' });
+  for (const x of f) if (x.doublonDe) x.data = f.find((y) => y.nom === x.doublonDe).data;
+  await ecrire('8 - Echec dossier en vrac', f);
+}
+
 (async () => {
   fs.mkdirSync(SORTIE, { recursive: true });
   navigateur = await chromium.launch({ executablePath: CHROME });
@@ -457,5 +542,8 @@ async function casRetraite() {
   if (!cas || cas === '3') await casIndependant();
   if (!cas || cas === '4') await casNonResident();
   if (!cas || cas === '5') await casRetraite();
+  if (!cas || cas === '6') await casVenteAchat();
+  if (!cas || cas === '7') await casHebergee();
+  if (!cas || cas === '8') await casEchec();
   await navigateur.close();
 })();

@@ -225,3 +225,6 @@ main { padding: 28px 32px 90px; overflow-y: auto; }
 .app-mail { min-height: 0; overflow-y: auto; }
 .app-mail main { overflow: visible; }
 #liste-dossiers { display: contents; }
+.voile-depot { position: fixed; inset: 0; z-index: 50; background: rgba(245, 241, 236, 0.86); display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
+.voile-depot > div { width: 100%; height: 100%; border: 2px dashed var(--dore); border-radius: 18px; display: flex; align-items: center; justify-content: center; }
+.voile-depot b { font-size: 20px; color: var(--texte); }

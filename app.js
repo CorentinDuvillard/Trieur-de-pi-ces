@@ -137,40 +137,82 @@
       demarrer(entrees, racine);
     });
   }
-  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('survol'); });
-  zone.addEventListener('dragleave', (e) => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('survol'); });
-  zone.addEventListener('drop', async (e) => {
+  // Glisser-déposer : dossiers, fichiers et ZIP, lâchés n'importe où dans la fenêtre, sur n'importe quel écran
+  const voile = $('#voile-depot');
+  const avecFichiers = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  let profondeur = 0;
+  const finSurvol = () => { profondeur = 0; zone.classList.remove('survol'); voile.hidden = true; };
+  window.addEventListener('dragenter', (e) => {
+    if (!avecFichiers(e)) return;
     e.preventDefault();
-    zone.classList.remove('survol');
-    const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    profondeur++;
+    const depotVisible = etat.onglet === 'trieur' && $('#e1').hasAttribute('data-visible');
+    if (depotVisible) zone.classList.add('survol'); else voile.hidden = false;
+  });
+  window.addEventListener('dragover', (e) => { if (avecFichiers(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+  window.addEventListener('dragleave', (e) => { if (avecFichiers(e) && --profondeur <= 0) finSurvol(); });
+  window.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    finSurvol();
+    if (!e.dataTransfer) return;
+    // Tout doit être demandé pendant l'événement, avant la moindre attente
+    const items = [...(e.dataTransfer.items || [])].filter((i) => i.kind === 'file');
+    const poignees = items.map((i) => (i.getAsFileSystemHandle ? i.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null)));
+    const entries = items.map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null));
+    const fichiersBruts = [...e.dataTransfer.files];
     const entrees = [];
     let racine = null;
-    if (entries.length === 1 && entries[0].isDirectory) racine = entries[0].name;
-    const lireEntree = async (entry, prefixe) => {
-      if (entry.isFile) {
-        const f = await new Promise((ok, ko) => entry.file(ok, ko));
-        entrees.push({ fichier: f, chemin: prefixe + f.name });
-      } else if (entry.isDirectory) {
-        const lecteur = entry.createReader();
-        let lot;
-        do {
-          lot = await new Promise((ok, ko) => lecteur.readEntries(ok, ko));
-          for (const x of lot) await lireEntree(x, prefixe + entry.name + '/');
-        } while (lot.length);
-      }
+
+    // 1. API d'accès aux fichiers (Chrome, Edge) : fonctionne aussi dans une page ouverte par double-clic
+    const lirePoignee = async (h, prefixe) => {
+      if (h.kind === 'file') entrees.push({ fichier: await h.getFile(), chemin: prefixe + h.name });
+      else for await (const x of h.values()) await lirePoignee(x, prefixe + h.name + '/');
     };
-    if (entries.length === 1 && entries[0].isDirectory) {
-      // Un dossier lâché : les chemins partent de l'intérieur du dossier
-      const lecteur = entries[0].createReader();
+    // 2. Ancienne API (secours)
+    const lireDossier = async (dir, prefixe) => {
+      const lecteur = dir.createReader();
       let lot;
-      do { lot = await new Promise((ok, ko) => lecteur.readEntries(ok, ko)); for (const x of lot) await lireEntree(x, ''); } while (lot.length);
-    } else if (entries.length) for (const en of entries) await lireEntree(en, '');
-    else for (const f of e.dataTransfer.files) entrees.push({ fichier: f, chemin: f.name });
-    if (entrees.length) demarrer(entrees, racine);
+      do {
+        lot = await new Promise((ok, ko) => lecteur.readEntries(ok, ko));
+        for (const x of lot) await lireEntree(x, prefixe);
+      } while (lot.length);
+    };
+    const lireEntree = async (entry, prefixe) => {
+      if (entry.isFile) entrees.push({ fichier: await new Promise((ok, ko) => entry.file(ok, ko)), chemin: prefixe + entry.name });
+      else if (entry.isDirectory) await lireDossier(entry, prefixe + entry.name + '/');
+    };
+
+    let lus = false;
+    try {
+      const h = (await Promise.all(poignees)).filter(Boolean);
+      if (h.length && h.length === items.length) {
+        if (h.length === 1 && h[0].kind === 'directory') {
+          racine = h[0].name;
+          for await (const x of h[0].values()) await lirePoignee(x, '');
+        } else for (const x of h) await lirePoignee(x, '');
+        lus = true;
+      }
+    } catch (err) { console.warn(err); entrees.length = 0; }
+    if (!lus) {
+      try {
+        const en = entries.filter(Boolean);
+        if (en.length === 1 && en[0].isDirectory) { racine = en[0].name; await lireDossier(en[0], ''); lus = true; }
+        else if (en.length && en.every((x) => x.isFile)) { for (const f of fichiersBruts) entrees.push({ fichier: f, chemin: f.name }); lus = true; }
+        else if (en.length) { for (const x of en) await lireEntree(x, ''); lus = true; }
+      } catch (err) { console.warn(err); entrees.length = 0; racine = null; }
+    }
+    if (!lus) {
+      // 3. Fichiers seuls
+      const dossiers = entries.filter((x) => x && x.isDirectory).length;
+      if (dossiers) { window.alert('Ce navigateur ne permet pas de lire un dossier glissé. Utiliser le bouton « Dossier ».'); return; }
+      for (const f of fichiersBruts) entrees.push({ fichier: f, chemin: f.name });
+    }
+    // Un seul ZIP lâché : son nom sert de nom provisoire au dossier
+    if (!racine && entrees.length === 1 && /\.zip$/i.test(entrees[0].chemin)) racine = entrees[0].chemin.replace(/\.zip$/i, '');
+    if (!entrees.length) return;
+    choisirOnglet('trieur');
+    demarrer(entrees, racine);
   });
-  // Un fichier lâché hors de la zone ne doit pas être ouvert par le navigateur
-  window.addEventListener('dragover', (e) => e.preventDefault());
-  window.addEventListener('drop', (e) => e.preventDefault());
 
   let numero = 0;
   function demarrer(entrees, racine) {
